@@ -1,0 +1,35 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // galeria/{imageId}: imageData (JPEG data URL <= 900,000 chars),
+    // name (1-120 chars), and createdAt (server timestamp); no other fields.
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isValidGalleryImage(data) {
+      return data.keys().hasAll(['imageData', 'name', 'createdAt'])
+        && data.keys().hasOnly(['imageData', 'name', 'createdAt'])
+        && data.imageData is string
+        && data.imageData.size() <= 900000
+        && data.imageData.matches('^data:image/jpeg;base64,[A-Za-z0-9+/]+={0,2}$')
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 120
+        && data.createdAt is timestamp
+        && data.createdAt == request.time;
+    }
+
+    match /galeria/{imageId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated()
+        && isValidGalleryImage(request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
